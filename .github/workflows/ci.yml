@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+    - master
+
+permissions:
+  contents: read
+
+env:
+  # Disable incremental compilation
+  CARGO_BUILD_INCREMENTAL: false
+  # Set prettier + more verbose terminal output
+  CARGO_TERM_COLOR: always
+  CARGO_TERM_VERBOSE: true
+  RUST_BACKTRACE: 1
+  # Faster compilation, error on warnings and only document current crate
+  RUSTFLAGS: "--codegen=debuginfo=0 --deny=warnings"
+
+jobs:
+  fmt:
+    name: Check formatting
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo fmt -- --check
+
+  clippy:
+    name: Run clippy
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo clippy
+
+  test-stable:
+    name: Test on stable
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test
+
+  test-msrv:
+    name: Test MSRV
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@1.56.0
+      - run: cargo test
+
+  test-nightly:
+    name: Test on nightly
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo test
