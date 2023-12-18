@@ -121,3 +121,41 @@ fn swapping() {
         },
     );
 }
+
+#[test]
+fn many_items() {
+    assert_merged(
+        files_with_cfg! {
+            #[cfg(foo)]
+            mod _ {
+                fn item1() {}
+                fn item2() {}
+                fn item3() {}
+                fn item5() {}
+                fn item6() {}
+            }
+
+            #[cfg(bar)]
+            mod _ {
+                fn item1() {}
+                fn item2() {}
+                fn item4() {}
+                fn item5() {}
+                fn item7() {}
+            }
+        },
+        quote! {
+            fn item1() {}
+            fn item2() {}
+            #[cfg(foo)]
+            fn item3() {}
+            #[cfg(bar)]
+            fn item4() {}
+            fn item5() {}
+            #[cfg(foo)]
+            fn item6() {}
+            #[cfg(bar)]
+            fn item7() {}
+        },
+    );
+}
