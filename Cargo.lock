@@ -43,6 +43,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "44c8b28c477cc3bf0e7966561e3460130e1255f7a1cf71931075f1c5e7a7e269"
 dependencies = [
  "proc-macro2",
+ "quote",
  "unicode-ident",
 ]
 
