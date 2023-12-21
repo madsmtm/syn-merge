@@ -268,6 +268,7 @@ impl DiffHook for Differ<'_> {
     }
 }
 
+/// The order in which the files are passed influences the output.
 pub fn merge_files(files: &[(File, Cfgs)]) -> Result<File, Error> {
     // Rough outline:
     // 1. Prepare the input for diffing (including preparing for nested diffing).

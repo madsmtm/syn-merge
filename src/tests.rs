@@ -98,26 +98,41 @@ fn differing_functions() {
 
 #[test]
 fn swapping() {
-    assert_merged(
-        files_with_cfg! {
-            #[cfg(a)]
-            mod _ {
-                const FOO1: usize = 1;
-                const FOO2: usize = 2;
-            }
+    let files = files_with_cfg! {
+        #[cfg(a)]
+        mod _ {
+            const FOO1: usize = 1;
+            const FOO2: usize = 2;
+        }
 
-            #[cfg(b)]
-            mod _ {
-                const FOO2: usize = 2;
-                const FOO1: usize = 1;
-            }
-        },
+        #[cfg(b)]
+        mod _ {
+            const FOO2: usize = 2;
+            const FOO1: usize = 1;
+        }
+    };
+
+    // a first, then b
+    assert_merged(
+        files,
         quote! {
             #[cfg(a)]
             const FOO1: usize = 1;
             const FOO2: usize = 2;
             #[cfg(b)]
             const FOO1: usize = 1;
+        },
+    );
+
+    // b first, then a
+    assert_merged(
+        &files.iter().cloned().rev().collect::<Vec<_>>(),
+        quote! {
+            #[cfg(b)]
+            const FOO2: usize = 2;
+            const FOO1: usize = 1;
+            #[cfg(a)]
+            const FOO2: usize = 2;
         },
     );
 }
