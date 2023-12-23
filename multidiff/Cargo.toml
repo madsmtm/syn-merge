@@ -1,0 +1,19 @@
+[package]
+name = "multidiff"
+version = "0.0.0"
+authors = ["Mads Marquart <mads@marquart.dk>"]
+edition = "2021"
+rust-version = "1.56"
+description = "Diff an arbitary number of inputs"
+documentation = "https://docs.rs/multidiff"
+repository = "https://github.com/madsmtm/syn-merge"
+license = "Zlib OR Apache-2.0 OR MIT"
+keywords = ["diff", "diffn", "ndiff", "lcs"]
+categories = ["algorithms"]
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+similar = { version = "2.3", default-features = false, features = [] }

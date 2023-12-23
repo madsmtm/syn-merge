@@ -16,6 +16,7 @@ default = ["std"]
 std = []
 
 [dependencies]
+multidiff = { path = "./multidiff" }
 proc-macro2 = { version = "1.0", default-features = false }
 similar = { version = "2.3", default-features = false, features = [] }
 quote = { version = "1", default-features = false }
@@ -27,3 +28,7 @@ features = ["full", "extra-traits", "clone-impls", "parsing", "printing"]
 
 [dev-dependencies]
 prettyplease = "0.2"
+
+[workspace]
+members = ["multidiff"]
+resolver = "2"

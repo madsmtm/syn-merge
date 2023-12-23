@@ -234,6 +234,7 @@ impl DiffHook for Differ<'_> {
 
     fn equal(&mut self, old_index: usize, new_index: usize, len: usize) -> Result<(), Self::Error> {
         eprintln!("equal {}/{}/{}", old_index, new_index, len);
+        // Diff recursively in here
         self.combined
             .extend(self.old[old_index..(old_index + len)].iter().cloned());
         Ok(())
