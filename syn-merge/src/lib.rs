@@ -280,13 +280,14 @@ pub fn merge_files(files: &[(File, Cfgs)]) -> Result<File, Error> {
     let old = &files[0].0.items;
     let new = &files[1].0.items;
 
-    let mut d = Differ {
-        combined: vec![],
-        old,
-        cfg_old: &files[0].1,
-        new,
-        cfg_new: &files[1].1,
-    };
+    let mut d =
+        Differ {
+            combined: vec![],
+            old,
+            cfg_old: &files[0].1,
+            new,
+            cfg_new: &files[1].1,
+        };
     lcs::diff(&mut d, old, 0..old.len(), new, 0..new.len())?;
     Ok(File {
         shebang: files[0].0.shebang.clone(),
