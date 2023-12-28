@@ -7,12 +7,8 @@ fn assert_diff_matches(data: &[&str], expected: &[(char, &[usize])]) {
     assert_eq!(actual.len(), expected.len());
 
     for (i, (expected, actual)) in expected.iter().zip(actual).enumerate() {
-        assert_eq!(expected.0, *actual.value, "idx: {i}");
-        assert_eq!(
-            expected.1, actual.appears_in,
-            "idx: {i}, value: {}",
-            actual.value
-        );
+        assert_eq!(expected.0, *actual.0);
+        assert_eq!(expected.1, actual.1 .0, "idx: {i}");
     }
 }
 
@@ -52,12 +48,9 @@ fn two() {
     assert_diff_matches(
         &["aaabbbccc", "baacccc"],
         &[
-            #[cfg(feature = "use-similar")]
-            ('a', &[0]),
             ('b', &[1]),
             ('a', &[0, 1]),
             ('a', &[0, 1]),
-            #[cfg(not(feature = "use-similar"))]
             ('a', &[0]),
             ('b', &[0]),
             ('b', &[0]),

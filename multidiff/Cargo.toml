@@ -14,9 +14,6 @@ categories = ["algorithms"]
 [features]
 default = ["std"]
 std = []
-use-similar = []
 
 [dependencies]
 diff = "0.1.13"
-proptest = "1.4.0"
-similar = { version = "2.3", default-features = false, features = [] }
