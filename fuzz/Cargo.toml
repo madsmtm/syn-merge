@@ -1,0 +1,37 @@
+[package]
+name = "fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+syn-merge = { path = "../syn-merge" }
+multidiff = { path = "../multidiff" }
+
+[dev-dependencies]
+quickcheck = "1.0.3"
+
+[[bin]]
+name = "multidiff_does_not_crash"
+path = "fuzz_targets/multidiff_does_not_crash.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "multidiff_equals_return_same"
+path = "fuzz_targets/multidiff_equals_return_same.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "multidiff_can_reconstruct_original"
+path = "fuzz_targets/multidiff_can_reconstruct_original.rs"
+test = false
+doc = false
+bench = false

@@ -1,0 +1,30 @@
+[package]
+name = "syn-merge"
+version = "0.0.0"
+authors = ["Mads Marquart <mads@marquart.dk>"]
+edition = "2021"
+rust-version = "1.56"
+description = "Merge syn structures by adding cfgs"
+documentation = "https://docs.rs/syn-merge"
+repository = "https://github.com/madsmtm/syn-merge"
+license = "Zlib OR Apache-2.0 OR MIT"
+keywords = ["syn", "diff", "merge", "cfg", "cfg-merge"]
+categories = ["algorithms", "development-tools::procedural-macro-helpers"]
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+multidiff = { path = "../multidiff" }
+proc-macro2 = { version = "1.0", default-features = false }
+similar = { version = "2.3", default-features = false, features = [] }
+quote = { version = "1", default-features = false }
+
+[dependencies.syn]
+version = "2.0"
+default-features = false
+features = ["full", "extra-traits", "clone-impls", "parsing", "printing"]
+
+[dev-dependencies]
+prettyplease = "0.2"

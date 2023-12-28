@@ -1,12 +1,18 @@
 use multidiff::multidiff;
 
-fn assert_diff_matches(slice: &[&[u8]], expected: &[(u8, &[usize])]) {
-    let actual: Vec<_> = multidiff(slice.iter().map(AsRef::as_ref)).collect();
+fn assert_diff_matches(data: &[&str], expected: &[(char, &[usize])]) {
+    let data: Vec<Vec<char>> = data.iter().map(|s| s.chars().collect()).collect();
+    let data: Vec<&[char]> = data.iter().map(|chars| &**chars).collect();
+    let actual: Vec<_> = multidiff(&data);
     assert_eq!(actual.len(), expected.len());
 
-    for (expected, actual) in expected.iter().zip(actual) {
-        assert_eq!(expected.0, *actual.value);
-        assert_eq!(expected.1, actual.appears_in);
+    for (i, (expected, actual)) in expected.iter().zip(actual).enumerate() {
+        assert_eq!(expected.0, *actual.value, "idx: {i}");
+        assert_eq!(
+            expected.1, actual.appears_in,
+            "idx: {i}, value: {}",
+            actual.value
+        );
     }
 }
 
@@ -16,23 +22,70 @@ fn empty() {
 }
 
 #[test]
-fn single() {
+fn equals() {
+    assert_diff_matches(&["ab", "ab", "ab"], &[('a', &[0, 1, 2]), ('b', &[0, 1, 2])]);
+}
+
+#[test]
+fn different() {
+    assert_diff_matches(&["a", "b", "c"], &[('a', &[0]), ('b', &[1]), ('c', &[2])]);
+}
+
+#[test]
+fn one_differs() {
     assert_diff_matches(
-        &[b"abbc"],
-        &[(b'a', &[0]), (b'b', &[0]), (b'b', &[0]), (b'c', &[0])],
+        &["ab", "ab", "ac"],
+        &[('a', &[0, 1, 2]), ('b', &[0, 1]), ('c', &[2])],
     );
 }
 
 #[test]
-fn simple() {
+fn one() {
     assert_diff_matches(
-        &[b"abc", b"bac", b"bca"],
+        &["abbc"],
+        &[('a', &[0]), ('b', &[0]), ('b', &[0]), ('c', &[0])],
+    );
+}
+
+#[test]
+fn two() {
+    assert_diff_matches(
+        &["aaabbbccc", "baacccc"],
         &[
-            (b'a', &[0]),
-            (b'b', &[0, 1, 2]),
-            (b'a', &[1]),
-            (b'c', &[0, 1, 2]),
-            (b'a', &[2]),
+            #[cfg(feature = "use-similar")]
+            ('a', &[0]),
+            ('b', &[1]),
+            ('a', &[0, 1]),
+            ('a', &[0, 1]),
+            #[cfg(not(feature = "use-similar"))]
+            ('a', &[0]),
+            ('b', &[0]),
+            ('b', &[0]),
+            ('b', &[0]),
+            ('c', &[1]),
+            ('c', &[0, 1]),
+            ('c', &[0, 1]),
+            ('c', &[0, 1]),
         ],
     );
+}
+
+#[test]
+fn three() {
+    assert_diff_matches(
+        &["abc", "bac", "bca"],
+        &[
+            ('a', &[0]),
+            ('b', &[0, 1, 2]),
+            ('a', &[1]),
+            ('c', &[0, 1, 2]),
+            ('a', &[2]),
+        ],
+    );
+}
+
+// https://github.com/mitsuhiko/similar/issues/57
+#[test]
+fn avoids_similar_crash() {
+    let _ = multidiff(&[&[0], &[0, 0]]);
 }

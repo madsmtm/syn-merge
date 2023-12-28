@@ -46,5 +46,4 @@ However, there is very little research on diffing between multiple files.
 
 [Khanna, Sanjeev & Kunal, Keshav & Pierce, Benjamin. (2007). A Formal Investigation of Diff3](https://www.cis.upenn.edu/~bcpierce/papers/diff3-short.pdf).
 
-The best I've found so far is an old tool
-[`diffn`](https://www.volkerschatz.com/unix/uware/diffn.html).
+"Generalized Longest Common Subsequence / LCS"
