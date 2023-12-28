@@ -48,17 +48,29 @@ compile_error!("The `std` feature currently must be enabled.");
 
 // Index into top-level structure.
 #[derive(Debug, Clone)]
-pub struct AppearsIn(pub Vec<usize>);
+pub struct AppearsIn(Vec<usize>);
 
 impl AppearsIn {
-    fn new(idx: usize) -> Self {
+    pub fn get(&self) -> &[usize] {
+        &self.0
+    }
+
+    pub fn new(idx: usize) -> Self {
         Self(vec![idx])
     }
 
-    fn add(self, idx: usize) -> Self {
+    pub fn add(self, idx: usize) -> Self {
         let mut vec = self.0;
         vec.push(idx);
         Self(vec)
+    }
+
+    pub fn contains(&self, idx: usize) -> bool {
+        self.0.contains(&idx)
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 }
 

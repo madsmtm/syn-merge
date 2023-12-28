@@ -6,7 +6,6 @@
 compile_error!("The `std` feature currently must be enabled.");
 
 use quote::format_ident;
-use similar::algorithms::{lcs, DiffHook};
 use std::any::Any;
 use std::fmt;
 use syn::{parse_quote, Attribute, Expr, Field, File, ForeignItem, ImplItem, Item, Stmt, Variant};
@@ -34,6 +33,7 @@ impl std::error::Error for Error {}
 /// Should support:
 /// - User-specified configs (e.g. flag `MYCRATE_XYZ` -> `feature = "xyz"`).
 /// - Automatically generated `rustc --print cfg`.
+#[derive(Debug)]
 pub struct Cfgs {
     s: String,
 }
@@ -49,14 +49,6 @@ impl Cfgs {
             #[cfg(#ident)]
         }
     }
-}
-
-struct Differ<'a> {
-    combined: Vec<Item>,
-    old: &'a [Item],
-    cfg_old: &'a Cfgs,
-    new: &'a [Item],
-    cfg_new: &'a Cfgs,
 }
 
 // Places where we need to recurse:
@@ -229,69 +221,29 @@ impl AddAttr for Expr {
     }
 }
 
-impl DiffHook for Differ<'_> {
-    type Error = Error;
-
-    fn equal(&mut self, old_index: usize, new_index: usize, len: usize) -> Result<(), Self::Error> {
-        eprintln!("equal {}/{}/{}", old_index, new_index, len);
-        // Diff recursively in here
-        self.combined
-            .extend(self.old[old_index..(old_index + len)].iter().cloned());
-        Ok(())
-    }
-
-    fn delete(
-        &mut self,
-        old_index: usize,
-        old_len: usize,
-        new_index: usize,
-    ) -> Result<(), Self::Error> {
-        eprintln!("delete {}/{}/{}", old_index, old_len, new_index);
-        for mut item in self.old[old_index..(old_index + old_len)].iter().cloned() {
-            item.add_attr(self.cfg_old.attribute())?;
-            self.combined.push(item);
-        }
-        Ok(())
-    }
-
-    fn insert(
-        &mut self,
-        old_index: usize,
-        new_index: usize,
-        new_len: usize,
-    ) -> Result<(), Self::Error> {
-        eprintln!("insert {}/{}/{}", old_index, new_index, new_len);
-        for mut item in self.new[new_index..(new_index + new_len)].iter().cloned() {
-            item.add_attr(self.cfg_new.attribute())?;
-            self.combined.push(item);
-        }
-        Ok(())
-    }
-}
-
 /// The order in which the files are passed influences the output.
 pub fn merge_files(files: &[(File, Cfgs)]) -> Result<File, Error> {
-    // Rough outline:
-    // 1. Prepare the input for diffing (including preparing for nested diffing).
-    // 2. Diff recursively, and write cfgs to output directly.
-    // 3. Do diffing for each file.
-    // 4. Somehow merge redundant cfgs?
-    assert_eq!(files.len(), 2, "todo");
-    let old = &files[0].0.items;
-    let new = &files[1].0.items;
+    let tmp_files: Vec<_> = files.iter().map(|(file, _)| &*file.items).collect();
+    let combined: Vec<_> = multidiff::multidiff(&tmp_files)
+        .into_iter()
+        .map(|(item, appears_in)| {
+            // If it appears in all, just output the item
+            if appears_in.len() == files.len() {
+                item.clone()
+            } else {
+                let mut item = item.clone();
+                for &idx in appears_in.get() {
+                    item.add_attr(files[idx].1.attribute()).unwrap();
+                }
+                item
+            }
+        })
+        .collect();
 
-    let mut d =
-        Differ {
-            combined: vec![],
-            old,
-            cfg_old: &files[0].1,
-            new,
-            cfg_new: &files[1].1,
-        };
-    lcs::diff(&mut d, old, 0..old.len(), new, 0..new.len())?;
     Ok(File {
         shebang: files[0].0.shebang.clone(),
+        // TODO: Merge attributes
         attrs: files[0].0.attrs.clone(),
-        items: d.combined,
+        items: combined,
     })
 }

@@ -8,7 +8,7 @@ fn assert_diff_matches(data: &[&str], expected: &[(char, &[usize])]) {
 
     for (i, (expected, actual)) in expected.iter().zip(actual).enumerate() {
         assert_eq!(expected.0, *actual.0);
-        assert_eq!(expected.1, actual.1 .0, "idx: {i}");
+        assert_eq!(expected.1, actual.1.get(), "idx: {i}");
     }
 }
 
