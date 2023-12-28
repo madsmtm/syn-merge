@@ -227,19 +227,34 @@ struct WithCfgs<'a, T> {
     cfgs: &'a Cfgs,
 }
 
+fn merge<'a, T: Merge + 'a>(iter: impl Iterator<Item = (&'a T, &'a Cfgs)>) -> T {
+    // TODO: Somehow merge the items here
+    for (item, _cfgs) in iter {
+        return item.clone();
+    }
+    unreachable!()
+}
+
 fn merge_recursively<T: Merge>(input: &[WithCfgs<'_, T>]) -> Vec<T> {
     let values: Vec<_> = input.iter().map(|with_cfgs| with_cfgs.values).collect();
 
-    multidiff::multidiff(&values)
+    multidiff::multidiff_indexes(&values)
         .into_iter()
-        .map(|(t, appears_in)| {
+        .map(|indexes| {
+            let iter = indexes.iter().zip(input).filter_map(
+                |(idx, with_cfgs)| idx.map(|idx| (&with_cfgs.values[idx], with_cfgs.cfgs))
+            );
+
+            let cfgs: Vec<_> = iter.clone().map(|(_, cfgs)| cfgs).collect();
+
+            let mut t = merge(iter);
+
             // If it appears in all, just output the item
-            if appears_in.len() == values.len() {
-                t.clone()
+            if cfgs.len() == input.len() {
+                t
             } else {
-                let mut t = t.clone();
-                for &idx in appears_in.get() {
-                    t.add_attr(input[idx].cfgs.attribute());
+                for cfgs in cfgs {
+                    t.add_attr(cfgs.attribute());
                 }
                 t
             }

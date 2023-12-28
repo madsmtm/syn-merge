@@ -172,6 +172,28 @@ pub fn multidiff<'a, T: PartialEq>(to_diff: &[&'a [T]]) -> Vec<(&'a T, AppearsIn
     current
 }
 
+pub fn multidiff_indexes<'a, T: PartialEq>(to_diff: &[&'a [T]]) -> Vec<Vec<Option<usize>>> {
+    let mut current_indexes: Vec<usize> = to_diff.iter().map(|_| 0).collect();
+    multidiff(to_diff)
+        .into_iter()
+        .map(|(_, appears_in)| {
+            current_indexes
+                .iter_mut()
+                .enumerate()
+                .map(|(i, idx)| {
+                    if appears_in.contains(i) {
+                        let res = Some(*idx);
+                        *idx += 1;
+                        res
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
+        .collect()
+}
+
 // pub fn multidiff_slice<'a, T: PartialEq + 'a>(
 //     to_diff: &'a [&'a [T]],
 // ) -> impl Iterator<Item = Chunk<'a, T>> {
