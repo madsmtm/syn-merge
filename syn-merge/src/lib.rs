@@ -6,10 +6,10 @@
 compile_error!("The `std` feature currently must be enabled.");
 
 use multidiff::DiffableSequence;
+use proc_macro2::TokenStream;
 use quote::format_ident;
-use std::any::Any;
 use std::fmt;
-use syn::{parse_quote, Attribute, File};
+use syn::{parse_quote, punctuated::Punctuated, Attribute, File};
 
 mod syn_impl;
 #[cfg(test)]
@@ -58,35 +58,116 @@ impl Cfgs {
 // ForeignItemMacro::mac
 // ImplItemMacro::mac
 
-// https://stackoverflow.com/a/25359060
-trait MyPartialEq {
-    // An &Any can be cast to a reference to a concrete type.
-    fn as_any(&self) -> &dyn Any;
-
-    // Perform the test.
-    fn equals_a(&self, _: &dyn MyPartialEq) -> bool;
-}
-
-// Implement A for all 'static types implementing PartialEq.
-impl<T: 'static + PartialEq> MyPartialEq for T {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn equals_a(&self, other: &dyn MyPartialEq) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<T>()
-            .map_or(false, |a| self == a)
-    }
-}
-
-pub trait Merge: Clone {
+pub trait Merge: Clone + Sized {
     fn top_level_eq(&self, _other: &Self) -> bool {
         todo!()
     }
 
+    fn merge<'a, I: IntoIterator<Item = (&'a Self, &'a Cfgs)>>(iter: I) -> Self
+    where
+        Self: 'a,
+        I::IntoIter: Clone,
+    {
+        // TODO: Somehow merge the items here
+        for (item, _cfgs) in iter {
+            return item.clone();
+        }
+        unreachable!()
+    }
+
     fn add_attr(&mut self, attr: Attribute);
+}
+
+impl<T: Merge> Merge for Box<T> {
+    fn top_level_eq(&self, other: &Self) -> bool {
+        (**self).top_level_eq(other)
+    }
+
+    fn merge<'a, I: IntoIterator<Item = (&'a Self, &'a Cfgs)>>(iter: I) -> Self
+    where
+        Self: 'a,
+        I::IntoIter: Clone,
+    {
+        Box::new(T::merge(iter.into_iter().map(|(t, cfgs)| (&**t, cfgs))))
+    }
+
+    fn add_attr(&mut self, attr: Attribute) {
+        (**self).add_attr(attr)
+    }
+}
+
+// TODO: Implement this properly
+impl Merge for Attribute {
+    fn top_level_eq(&self, other: &Self) -> bool {
+        self == other
+    }
+
+    fn merge<'a, I: IntoIterator<Item = (&'a Self, &'a Cfgs)>>(iter: I) -> Self
+    where
+        Self: 'a,
+        I::IntoIter: Clone,
+    {
+        parse_quote! {
+            #[cfg(todo)]
+        }
+    }
+
+    fn add_attr(&mut self, attr: Attribute) {
+        todo!()
+    }
+}
+
+// TODO: Implement this properly
+impl<T: Merge> Merge for Vec<T> {
+    fn top_level_eq(&self, other: &Self) -> bool {
+        true
+    }
+
+    fn merge<'a, I: IntoIterator<Item = (&'a Self, &'a Cfgs)>>(iter: I) -> Self
+    where
+        Self: 'a,
+        I::IntoIter: Clone,
+    {
+        let tmp: Vec<_> = iter
+            .into_iter()
+            .map(|(values, cfgs)| WithCfgs {
+                values: &**values,
+                cfgs,
+            })
+            .collect();
+        merge_recursively(&tmp)
+    }
+
+    fn add_attr(&mut self, attr: Attribute) {
+        for item in self {
+            item.add_attr(attr.clone());
+        }
+    }
+}
+
+impl Merge for TokenStream {
+    fn top_level_eq(&self, _other: &Self) -> bool {
+        // TODO: Implement this by comparing token trees
+        unimplemented!()
+    }
+
+    fn add_attr(&mut self, _attr: Attribute) {
+        // TODO: Maybe implement this by not considering the higher-level items equal?
+        unimplemented!()
+    }
+}
+
+// TODO: Implement this properly
+impl<T: Merge, P: PartialEq + Clone> Merge for Punctuated<T, P> {
+    fn top_level_eq(&self, _other: &Self) -> bool {
+        true
+    }
+
+    fn add_attr(&mut self, attr: Attribute) {
+        for item in self {
+            item.add_attr(attr.clone());
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -107,15 +188,7 @@ impl<'a, T: Merge> DiffableSequence for WithCfgs<'a, T> {
     }
 }
 
-fn merge<'a, T: Merge + 'a>(iter: impl Iterator<Item = (&'a T, &'a Cfgs)>) -> T {
-    // TODO: Somehow merge the items here
-    for (item, _cfgs) in iter {
-        return item.clone();
-    }
-    unreachable!()
-}
-
-fn merge_recursively<T: Merge>(input: &[WithCfgs<'_, T>]) -> Vec<T> {
+pub(crate) fn merge_recursively<T: Merge>(input: &[WithCfgs<'_, T>]) -> Vec<T> {
     multidiff::multidiff_indexes(input)
         .into_iter()
         .map(|indexes| {
@@ -125,7 +198,7 @@ fn merge_recursively<T: Merge>(input: &[WithCfgs<'_, T>]) -> Vec<T> {
 
             let cfgs: Vec<_> = iter.clone().map(|(_, cfgs)| cfgs).collect();
 
-            let mut t = merge(iter);
+            let mut t = T::merge(iter);
 
             // If it appears in all, just output the item
             if cfgs.len() == input.len() {

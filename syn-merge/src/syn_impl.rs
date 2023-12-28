@@ -4,31 +4,53 @@
 //!
 //! Note: There is no need to compare tokens, they're always equal.
 //! <https://docs.rs/syn/2.0.43/src/syn/token.rs.html#302-306>
-use proc_macro2::TokenStream;
-use syn::{Attribute, Expr, Field, ForeignItem, ImplItem, Stmt, Variant};
+use syn::*;
 
-use super::Merge;
+use super::{Cfgs, Merge};
 
-impl Merge for TokenStream {
-    fn top_level_eq(&self, _other: &Self) -> bool {
-        // TODO: Implement this by comparing token trees
-        unimplemented!()
-    }
+macro_rules! impl_merge_eq {
+    ($(<($generics:ident),*>)? $ty:ty) => {
+        impl $(<($generics: PartialEq),*>)? Merge for $ty {
+            fn top_level_eq(&self, other: &Self) -> bool {
+                self == other
+            }
 
-    fn add_attr(&mut self, _attr: Attribute) {
-        // TODO: Maybe implement this by not considering the higher-level items equal?
-        unimplemented!()
-    }
+            fn merge<'a, I: IntoIterator<Item = (&'a Self, &'a Cfgs)>>(iter: I) -> Self
+            where
+                Self: 'a,
+                I::IntoIter: Clone,
+            {
+                let (item, _cfgs) = iter.into_iter().next().unwrap();
+                item.clone()
+            }
+
+            fn add_attr(&mut self, attr: Attribute) {
+                unreachable!()
+            }
+        }
+    };
 }
+
+fn extract_simple<'a, T: 'a + Clone, I: IntoIterator<Item = (&'a T, &'a Cfgs)>>(iter: I) -> T {
+    let (item, _cfgs) = iter.into_iter().next().unwrap();
+    item.clone()
+}
+
+// impl_merge_eq!(Visibility);
+// impl_merge_eq!(token::Const);
+// impl_merge_eq!(token::Colon);
+// impl_merge_eq!(proc_macro2::Ident);
+// impl_merge_eq!(Type);
+// impl_merge_eq!(Generics);
 
 macro_rules! impl_merge_enum {
     (
-        $ty:ident {
-            $($variant:ident),* $(,)?
+        $ty:ty {
+            $($variant:ident ,)*
             $(_ $comma:tt)?
         }
     ) => {
-        impl Merge for syn::$ty {
+        impl Merge for $ty {
             fn top_level_eq(&self, other: &Self) -> bool {
                 match (self, other) {
                     $(
@@ -56,16 +78,30 @@ macro_rules! impl_merge_struct {
             $($field:ident),* $(,)?
         }
     ) => {
-        impl Merge for syn::$ty {
+        impl Merge for $ty {
             fn top_level_eq(&self, other: &Self) -> bool {
                 // Ensure we've named all fields
-                let syn::$ty {
+                let Self {
                     attrs: _,
                     $($field : _,)*
                     $($($recursed : _,)*)?
                 } = self;
 
+                // TODO: This should maybe use `top_level_eq` recursively?
                 true $(&& self.$field == other.$field)*
+            }
+
+            fn merge<'a, I: IntoIterator<Item = (&'a Self, &'a Cfgs)>>(iter: I) -> Self
+            where
+                Self: 'a,
+                I::IntoIter: Clone,
+            {
+                let iter = iter.into_iter();
+                Self {
+                    attrs: Merge::merge(iter.clone().map(|(Self { attrs, .. }, cfgs)| (attrs, cfgs))),
+                    $($field: extract_simple(iter.clone().map(|(Self { $field, .. }, cfgs)| ($field, cfgs))),)*
+                    $($($recursed: Merge::merge(iter.clone().map(|(Self { $recursed, .. }, cfgs)| ($recursed, cfgs))),)*)?
+                }
             }
 
             fn add_attr(&mut self, attr: Attribute) {
@@ -110,9 +146,10 @@ impl_merge_struct! {
 }
 
 impl_merge_struct! {
-    ItemFn (block) {
+    ItemFn { // (block) {
         vis,
         sig,
+        block, // TODO
     }
 }
 
@@ -145,12 +182,13 @@ impl_merge_struct! {
 }
 
 impl_merge_struct! {
-    ItemMod (content) {
+    ItemMod { // (content) {
         vis,
         unsafety,
         mod_token,
         ident,
         semi,
+        content, // TODO
     }
 }
 
@@ -168,17 +206,18 @@ impl_merge_struct! {
 }
 
 impl_merge_struct! {
-    ItemStruct (fields) {
+    ItemStruct {// (fields) {
         vis,
         struct_token,
         ident,
         generics,
         semi_token,
+        fields, // TODO
     }
 }
 
 impl_merge_struct! {
-    ItemTrait (items) {
+    ItemTrait {// (items) {
         vis,
         unsafety,
         auto_token,
@@ -189,6 +228,7 @@ impl_merge_struct! {
         colon_token,
         supertraits,
         brace_token,
+        items, // TODO
     }
 }
 
@@ -217,11 +257,12 @@ impl_merge_struct! {
 }
 
 impl_merge_struct! {
-    ItemUnion (fields) {
+    ItemUnion {// (fields) {
         vis,
         union_token,
         ident,
         generics,
+        fields, // TODO
     }
 }
 
