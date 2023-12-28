@@ -5,6 +5,7 @@
 #[cfg(not(feature = "std"))]
 compile_error!("The `std` feature currently must be enabled.");
 
+use multidiff::DiffableSequence;
 use quote::format_ident;
 use std::any::Any;
 use std::fmt;
@@ -227,6 +228,18 @@ struct WithCfgs<'a, T> {
     cfgs: &'a Cfgs,
 }
 
+impl<'a, T: PartialEq> DiffableSequence for WithCfgs<'a, T> {
+    type Item = &'a T;
+
+    fn eq(a: &Self::Item, b: &Self::Item) -> bool {
+        a == b
+    }
+
+    fn get_iter(&self) -> impl Iterator<Item = Self::Item> {
+        self.values.iter()
+    }
+}
+
 fn merge<'a, T: Merge + 'a>(iter: impl Iterator<Item = (&'a T, &'a Cfgs)>) -> T {
     // TODO: Somehow merge the items here
     for (item, _cfgs) in iter {
@@ -236,9 +249,7 @@ fn merge<'a, T: Merge + 'a>(iter: impl Iterator<Item = (&'a T, &'a Cfgs)>) -> T 
 }
 
 fn merge_recursively<T: Merge>(input: &[WithCfgs<'_, T>]) -> Vec<T> {
-    let values: Vec<_> = input.iter().map(|with_cfgs| with_cfgs.values).collect();
-
-    multidiff::multidiff_indexes(&values)
+    multidiff::multidiff_indexes(input)
         .into_iter()
         .map(|indexes| {
             let iter = indexes.iter().zip(input).filter_map(

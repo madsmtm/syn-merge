@@ -89,28 +89,74 @@ impl<T> Clone for Chunk<'_, T> {
     }
 }
 
-pub fn multidiff<'a, T: PartialEq>(to_diff: &[&'a [T]]) -> Vec<(&'a T, AppearsIn)> {
-    let mut iter = to_diff.into_iter().enumerate();
+pub trait DiffableSequence {
+    type Item;
+
+    fn eq(a: &Self::Item, b: &Self::Item) -> bool;
+
+    fn get_iter(&self) -> impl Iterator<Item = Self::Item>;
+}
+
+impl<T: DiffableSequence> DiffableSequence for &T {
+    type Item = T::Item;
+
+    fn eq(a: &Self::Item, b: &Self::Item) -> bool {
+        T::eq(a, b)
+    }
+
+    fn get_iter(&self) -> impl Iterator<Item = Self::Item> {
+        T::get_iter(&**self)
+    }
+}
+
+impl<'a, T: PartialEq> DiffableSequence for &'a [T] {
+    type Item = &'a T;
+
+    fn eq(a: &Self::Item, b: &Self::Item) -> bool {
+        T::eq(a, b)
+    }
+
+    fn get_iter(&self) -> impl Iterator<Item = Self::Item> {
+        <[T]>::iter(self)
+    }
+}
+
+impl<T: PartialEq + Clone> DiffableSequence for Vec<T> {
+    type Item = T;
+
+    fn eq(a: &Self::Item, b: &Self::Item) -> bool {
+        T::eq(a, b)
+    }
+
+    fn get_iter(&self) -> impl Iterator<Item = Self::Item> {
+        <[T]>::iter(self).cloned()
+    }
+}
+
+pub fn multidiff<T: DiffableSequence>(
+    sequences: impl IntoIterator<Item = T>,
+) -> Vec<(T::Item, AppearsIn)> {
+    let mut iter = sequences.into_iter().enumerate();
     let Some((idx, first)) = iter.next() else {
         return vec![];
     };
 
     let mut current: Vec<_> = first
-        .iter()
+        .get_iter()
         .map(|value| (value, AppearsIn::new(idx)))
         .collect();
 
-    for (idx, &new) in iter {
-        enum DiffHelper<'a, T> {
-            Current(&'a (&'a T, AppearsIn)),
-            New(&'a T),
+    for (idx, new) in iter {
+        enum DiffHelper<'a, T: DiffableSequence> {
+            Current(&'a (T::Item, AppearsIn)),
+            New(T::Item),
         }
 
-        impl<T: PartialEq> PartialEq for DiffHelper<'_, T> {
+        impl<T: DiffableSequence> PartialEq for DiffHelper<'_, T> {
             fn eq(&self, other: &Self) -> bool {
-                match (self, other) {
-                    (Self::Current(current), Self::New(new)) => current.0 == *new,
-                    (Self::New(new), Self::Current(current)) => current.0 == *new,
+                match (&self, &other) {
+                    (Self::Current(current), Self::New(new)) => T::eq(&current.0, new),
+                    (Self::New(new), Self::Current(current)) => T::eq(&current.0, new),
                     _ => unimplemented!(),
                 }
             }
@@ -125,8 +171,11 @@ pub fn multidiff<'a, T: PartialEq>(to_diff: &[&'a [T]]) -> Vec<(&'a T, AppearsIn
             InNew,
         }
 
-        let current_tmp = current.iter().map(DiffHelper::Current).collect::<Vec<_>>();
-        let new_tmp = new.iter().map(DiffHelper::New).collect::<Vec<_>>();
+        let current_tmp = current
+            .iter()
+            .map(<DiffHelper<'_, T>>::Current)
+            .collect::<Vec<_>>();
+        let new_tmp = new.get_iter().map(DiffHelper::New).collect::<Vec<_>>();
         let ops: Vec<_> =
             diff::slice(&current_tmp, &new_tmp)
                 .into_iter()
@@ -138,15 +187,13 @@ pub fn multidiff<'a, T: PartialEq>(to_diff: &[&'a [T]]) -> Vec<(&'a T, AppearsIn
                 .collect();
 
         let mut current_iter = current.into_iter();
-        let mut new_iter = new.into_iter();
+        let mut new_iter = new.get_iter();
         let next_current = ops
             .iter()
             .map(|op| match op {
                 Op::Both => {
                     let (current_value, appears_in) = current_iter.next().unwrap();
-                    let new_value = new_iter.next().unwrap();
-
-                    debug_assert!(current_value == new_value);
+                    let _ = new_iter.next().unwrap();
 
                     (current_value, appears_in.add(idx))
                 }
@@ -166,15 +213,12 @@ pub fn multidiff<'a, T: PartialEq>(to_diff: &[&'a [T]]) -> Vec<(&'a T, AppearsIn
         current = next_current;
     }
 
-    debug_assert!(current.len() <= to_diff.iter().map(|slice| slice.len()).sum());
-    debug_assert!(to_diff.iter().all(|slice| slice.len() <= current.len()));
-
     current
 }
 
-pub fn multidiff_indexes<'a, T: PartialEq>(to_diff: &[&'a [T]]) -> Vec<Vec<Option<usize>>> {
+pub fn multidiff_indexes<T: DiffableSequence>(to_diff: &[T]) -> Vec<Vec<Option<usize>>> {
     let mut current_indexes: Vec<usize> = to_diff.iter().map(|_| 0).collect();
-    multidiff(to_diff)
+    multidiff(to_diff.into_iter())
         .into_iter()
         .map(|(_, appears_in)| {
             current_indexes

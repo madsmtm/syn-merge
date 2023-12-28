@@ -80,5 +80,6 @@ fn three() {
 // https://github.com/mitsuhiko/similar/issues/57
 #[test]
 fn avoids_similar_crash() {
-    let _ = multidiff(&[&[0], &[0, 0]]);
+    let input: &[&[u8]] = &[&[0], &[0, 0]];
+    let _ = multidiff(input);
 }
