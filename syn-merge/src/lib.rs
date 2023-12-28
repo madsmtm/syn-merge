@@ -6,11 +6,13 @@
 compile_error!("The `std` feature currently must be enabled.");
 
 use multidiff::DiffableSequence;
-use proc_macro2::TokenStream;
 use quote::format_ident;
 use std::fmt;
 use syn::{parse_quote, punctuated::Punctuated, Attribute, File};
 
+#[macro_use]
+mod macros;
+mod proc_macro_impl;
 mod syn_impl;
 #[cfg(test)]
 mod tests;
@@ -59,7 +61,8 @@ impl Cfgs {
 // ImplItemMacro::mac
 
 pub trait Merge: Clone + Sized {
-    fn top_level_eq(&self, _other: &Self) -> bool {
+    fn top_level_eq(&self, other: &Self) -> bool {
+        let _ = other;
         todo!()
     }
 
@@ -68,14 +71,24 @@ pub trait Merge: Clone + Sized {
         Self: 'a,
         I::IntoIter: Clone,
     {
-        // TODO: Somehow merge the items here
-        for (item, _cfgs) in iter {
-            return item.clone();
-        }
-        unreachable!()
+        merge_by_extracting_first(iter)
     }
 
-    fn add_attr(&mut self, attr: Attribute);
+    fn add_attr(&mut self, attr: Attribute) {
+        let _ = attr;
+        unimplemented!()
+    }
+}
+
+pub(crate) fn merge_by_extracting_first<
+    'a,
+    T: 'a + Clone,
+    I: IntoIterator<Item = (&'a T, &'a Cfgs)>,
+>(
+    iter: I,
+) -> T {
+    let (item, _cfgs) = iter.into_iter().next().unwrap();
+    item.clone()
 }
 
 impl<T: Merge> Merge for Box<T> {
@@ -117,9 +130,8 @@ impl Merge for Attribute {
     }
 }
 
-// TODO: Implement this properly
 impl<T: Merge> Merge for Vec<T> {
-    fn top_level_eq(&self, other: &Self) -> bool {
+    fn top_level_eq(&self, _other: &Self) -> bool {
         true
     }
 
@@ -145,22 +157,18 @@ impl<T: Merge> Merge for Vec<T> {
     }
 }
 
-impl Merge for TokenStream {
-    fn top_level_eq(&self, _other: &Self) -> bool {
-        // TODO: Implement this by comparing token trees
-        unimplemented!()
-    }
-
-    fn add_attr(&mut self, _attr: Attribute) {
-        // TODO: Maybe implement this by not considering the higher-level items equal?
-        unimplemented!()
-    }
-}
-
-// TODO: Implement this properly
 impl<T: Merge, P: PartialEq + Clone> Merge for Punctuated<T, P> {
     fn top_level_eq(&self, _other: &Self) -> bool {
         true
+    }
+
+    fn merge<'a, I: IntoIterator<Item = (&'a Self, &'a Cfgs)>>(iter: I) -> Self
+    where
+        Self: 'a,
+        I::IntoIter: Clone,
+    {
+        let _ = iter;
+        todo!("implement this properly")
     }
 
     fn add_attr(&mut self, attr: Attribute) {
