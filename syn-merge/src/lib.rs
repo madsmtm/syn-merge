@@ -97,19 +97,13 @@ impl<T: 'static + PartialEq> MyPartialEq for T {
     }
 }
 
-trait AddAttr {
-    fn add_attr(&mut self, attr: Attribute) -> Result<(), Error>;
+pub trait Merge: Clone + PartialEq {
+    fn add_attr(&mut self, attr: Attribute);
 }
 
-impl AddAttr for Variant {
-    fn add_attr(&mut self, attr: Attribute) -> Result<(), Error> {
-        Ok(self.attrs.push(attr))
-    }
-}
-
-impl AddAttr for Item {
-    fn add_attr(&mut self, attr: Attribute) -> Result<(), Error> {
-        Ok(match self {
+impl Merge for Item {
+    fn add_attr(&mut self, attr: Attribute) {
+        match self {
             Item::Const(item) => item.attrs.push(attr),
             Item::Enum(item) => item.attrs.push(attr),
             Item::ExternCrate(item) => item.attrs.push(attr),
@@ -127,56 +121,62 @@ impl AddAttr for Item {
             Item::Use(item) => item.attrs.push(attr),
             Item::Verbatim(_) => unimplemented!(),
             _ => unimplemented!(),
-        })
+        }
     }
 }
 
-impl AddAttr for ForeignItem {
-    fn add_attr(&mut self, attr: Attribute) -> Result<(), Error> {
-        Ok(match self {
+impl Merge for Variant {
+    fn add_attr(&mut self, attr: Attribute) {
+        self.attrs.push(attr)
+    }
+}
+
+impl Merge for ForeignItem {
+    fn add_attr(&mut self, attr: Attribute) {
+        match self {
             ForeignItem::Fn(item) => item.attrs.push(attr),
             ForeignItem::Static(item) => item.attrs.push(attr),
             ForeignItem::Type(item) => item.attrs.push(attr),
             ForeignItem::Macro(item) => item.attrs.push(attr),
             ForeignItem::Verbatim(_) => unimplemented!(),
             _ => unimplemented!(),
-        })
+        }
     }
 }
 
-impl AddAttr for ImplItem {
-    fn add_attr(&mut self, attr: Attribute) -> Result<(), Error> {
-        Ok(match self {
+impl Merge for ImplItem {
+    fn add_attr(&mut self, attr: Attribute) {
+        match self {
             ImplItem::Const(item) => item.attrs.push(attr),
             ImplItem::Fn(item) => item.attrs.push(attr),
             ImplItem::Type(item) => item.attrs.push(attr),
             ImplItem::Macro(item) => item.attrs.push(attr),
             ImplItem::Verbatim(_) => unimplemented!(),
             _ => unimplemented!(),
-        })
-    }
-}
-
-impl AddAttr for Field {
-    fn add_attr(&mut self, attr: Attribute) -> Result<(), Error> {
-        Ok(self.attrs.push(attr))
-    }
-}
-
-impl AddAttr for Stmt {
-    fn add_attr(&mut self, attr: Attribute) -> Result<(), Error> {
-        match self {
-            Stmt::Local(local) => Ok(local.attrs.push(attr)),
-            Stmt::Item(item) => item.add_attr(attr),
-            Stmt::Expr(expr, _) => expr.add_attr(attr),
-            Stmt::Macro(macro_) => Ok(macro_.attrs.push(attr)),
         }
     }
 }
 
-impl AddAttr for Expr {
-    fn add_attr(&mut self, attr: Attribute) -> Result<(), Error> {
-        Ok(match self {
+impl Merge for Field {
+    fn add_attr(&mut self, attr: Attribute) {
+        self.attrs.push(attr)
+    }
+}
+
+impl Merge for Stmt {
+    fn add_attr(&mut self, attr: Attribute) {
+        match self {
+            Stmt::Local(local) => local.attrs.push(attr),
+            Stmt::Item(item) => item.add_attr(attr),
+            Stmt::Expr(expr, _) => expr.add_attr(attr),
+            Stmt::Macro(macro_) => macro_.attrs.push(attr),
+        }
+    }
+}
+
+impl Merge for Expr {
+    fn add_attr(&mut self, attr: Attribute) {
+        match self {
             Expr::Array(expr) => expr.attrs.push(attr),
             Expr::Assign(expr) => expr.attrs.push(attr),
             Expr::Async(expr) => expr.attrs.push(attr),
@@ -217,33 +217,52 @@ impl AddAttr for Expr {
             Expr::Yield(expr) => expr.attrs.push(attr),
             Expr::Verbatim(_) => unimplemented!(),
             _ => unimplemented!(),
-        })
+        }
     }
 }
 
-/// The order in which the files are passed influences the output.
-pub fn merge_files(files: &[(File, Cfgs)]) -> Result<File, Error> {
-    let tmp_files: Vec<_> = files.iter().map(|(file, _)| &*file.items).collect();
-    let combined: Vec<_> = multidiff::multidiff(&tmp_files)
+#[derive(Debug)]
+struct WithCfgs<'a, T> {
+    values: &'a [T],
+    cfgs: &'a Cfgs,
+}
+
+fn merge_recursively<T: Merge>(input: &[WithCfgs<'_, T>]) -> Vec<T> {
+    let values: Vec<_> = input.iter().map(|with_cfgs| with_cfgs.values).collect();
+
+    multidiff::multidiff(&values)
         .into_iter()
-        .map(|(item, appears_in)| {
+        .map(|(t, appears_in)| {
             // If it appears in all, just output the item
-            if appears_in.len() == files.len() {
-                item.clone()
+            if appears_in.len() == values.len() {
+                t.clone()
             } else {
-                let mut item = item.clone();
+                let mut t = t.clone();
                 for &idx in appears_in.get() {
-                    item.add_attr(files[idx].1.attribute()).unwrap();
+                    t.add_attr(input[idx].cfgs.attribute());
                 }
-                item
+                t
             }
+        })
+        .collect()
+}
+
+/// The order in which the files are passed influences the output.
+pub fn merge_files(input: &[(File, Cfgs)]) -> Result<File, Error> {
+    let items: Vec<_> = input
+        .iter()
+        .map(|(file, cfgs)| WithCfgs {
+            values: &file.items,
+            cfgs,
         })
         .collect();
 
+    let combined = merge_recursively(&items);
+
     Ok(File {
-        shebang: files[0].0.shebang.clone(),
+        shebang: input[0].0.shebang.clone(),
         // TODO: Merge attributes
-        attrs: files[0].0.attrs.clone(),
+        attrs: input[0].0.attrs.clone(),
         items: combined,
     })
 }
