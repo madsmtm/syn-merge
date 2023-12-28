@@ -1,5 +1,5 @@
 [workspace]
-members = ["syn-merge", "multidiff", "fuzz"]
+members = ["syn-merge", "multidiff", "fuzz", "generate"]
 resolver = "2"
 
 # For fuzzing

@@ -14,6 +14,7 @@ use syn::{parse_quote, punctuated::Punctuated, Attribute, File};
 mod macros;
 mod proc_macro_impl;
 mod syn_impl;
+mod syn_impl_generated;
 #[cfg(test)]
 mod tests;
 
@@ -109,6 +110,72 @@ impl<T: Merge> Merge for Box<T> {
     }
 }
 
+impl<T: Merge> Merge for Option<T> {
+    fn top_level_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Some(this), Some(other)) => this.top_level_eq(other),
+            (None, None) => true,
+            _ => false,
+        }
+    }
+
+    fn merge<'a, I: IntoIterator<Item = (&'a Self, &'a Cfgs)>>(iter: I) -> Self
+    where
+        Self: 'a,
+        I::IntoIter: Clone,
+    {
+        todo!()
+    }
+
+    fn add_attr(&mut self, attr: Attribute) {
+        match self {
+            Some(this) => this.add_attr(attr),
+            None => unimplemented!(),
+        }
+    }
+}
+
+impl<T: Merge, U: Merge> Merge for (T, U) {
+    fn top_level_eq(&self, other: &Self) -> bool {
+        self.0.top_level_eq(&other.0) && self.1.top_level_eq(&other.1)
+    }
+
+    fn merge<'a, I: IntoIterator<Item = (&'a Self, &'a Cfgs)>>(iter: I) -> Self
+    where
+        Self: 'a,
+        I::IntoIter: Clone,
+    {
+        todo!()
+    }
+
+    fn add_attr(&mut self, attr: Attribute) {
+        self.0.add_attr(attr.clone());
+        self.1.add_attr(attr);
+    }
+}
+
+impl<T: Merge, U: Merge, V: Merge> Merge for (T, U, V) {
+    fn top_level_eq(&self, other: &Self) -> bool {
+        self.0.top_level_eq(&other.0)
+            && self.1.top_level_eq(&other.1)
+            && self.2.top_level_eq(&other.2)
+    }
+
+    fn merge<'a, I: IntoIterator<Item = (&'a Self, &'a Cfgs)>>(iter: I) -> Self
+    where
+        Self: 'a,
+        I::IntoIter: Clone,
+    {
+        todo!()
+    }
+
+    fn add_attr(&mut self, attr: Attribute) {
+        self.0.add_attr(attr.clone());
+        self.1.add_attr(attr.clone());
+        self.2.add_attr(attr);
+    }
+}
+
 // TODO: Implement this properly
 impl Merge for Attribute {
     fn top_level_eq(&self, other: &Self) -> bool {
@@ -200,9 +267,9 @@ pub(crate) fn merge_recursively<T: Merge>(input: &[WithCfgs<'_, T>]) -> Vec<T> {
     multidiff::multidiff_indexes(input)
         .into_iter()
         .map(|indexes| {
-            let iter = indexes.iter().zip(input).filter_map(
-                |(idx, with_cfgs)| idx.map(|idx| (&with_cfgs.values[idx], with_cfgs.cfgs))
-            );
+            let iter = indexes.iter().zip(input).filter_map(|(idx, with_cfgs)| {
+                idx.map(|idx| (&with_cfgs.values[idx], with_cfgs.cfgs))
+            });
 
             let cfgs: Vec<_> = iter.clone().map(|(_, cfgs)| cfgs).collect();
 
